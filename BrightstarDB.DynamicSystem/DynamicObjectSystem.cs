@@ -9,14 +9,14 @@ namespace BrightstarDB.DynamicSystem
 {
     /// <summary>
     /// The dynamic object system allows for the creation and persistence of types and instances.
-    /// Both types and instances are data driven.
+    /// Both types and instances are data in a dynamic object.
     /// </summary>
-    public class DynamicObjectSystem
+    public class DynamicObjectSystem : IDynamicObjectSystem
     {
         private readonly string _connectionString;
         private readonly string _storeId;
         private readonly DynamicStore _dynamicStore;
-        private const string UriPrefix = "http://www.brightstardb.com/dynamic/system/";
+        public const string UriPrefix = "http://www.brightstardb.com/dynamic/system/";
 
         public DynamicObjectSystem(string connectionString, string storeId)
         {
@@ -35,7 +35,8 @@ namespace BrightstarDB.DynamicSystem
         }
 
         private const string TypesQuery = @"select ?id where { ?id <http://www.brightstardb.com/dynamic/system/type> ""type""^^<http://www.w3.org/2001/XMLSchema#string> }";
-        private const string GetTypeByName = @"select ?id where {{ ?id <http://www.brightstardb.com/dynamic/system/name> ""{0}""^^<http://www.w3.org/2001/XMLSchema#string> . ?id <http://www.brightstardb.com/dynamic/system/type> ""type""^^<http://www.w3.org/2001/XMLSchema#string> }}";
+        private const string GetTypeByNameQuery = @"select ?id where {{ ?id <http://www.brightstardb.com/dynamic/system/name> ""{0}""^^<http://www.w3.org/2001/XMLSchema#string> . ?id <http://www.brightstardb.com/dynamic/system/type> ""type""^^<http://www.w3.org/2001/XMLSchema#string> }}";
+        private const string GetInstancesOfTypeQuery = @"select ?id where {{ ?id <http://www.brightstardb.com/dynamic/system/type> <{0}> }}";
 
         public IEnumerable<dynamic> Types
         {
@@ -45,7 +46,7 @@ namespace BrightstarDB.DynamicSystem
         public dynamic AssertType(string name, IEnumerable<string> instanceProperties)
         {
             // check if one exists already
-            var type = _dynamicStore.BindObjectsWithSparql(String.Format(GetTypeByName, name)).FirstOrDefault();
+            var type = _dynamicStore.BindObjectsWithSparql(String.Format(GetTypeByNameQuery, name)).FirstOrDefault();
             if (type != null)
             {
                 // update instance properties
@@ -65,7 +66,7 @@ namespace BrightstarDB.DynamicSystem
 
         public dynamic GetType(string name)
         {
-            return _dynamicStore.BindObjectsWithSparql(String.Format(GetTypeByName, name)).FirstOrDefault();           
+            return _dynamicStore.BindObjectsWithSparql(String.Format(GetTypeByNameQuery, name)).FirstOrDefault();           
         }
 
         public void DeleteObject(string id)
@@ -74,15 +75,6 @@ namespace BrightstarDB.DynamicSystem
             var store = dataObjectContext.OpenStore(_storeId);
             store.GetDataObject(id).Delete();
             store.SaveChanges();
-        }
-
-        /// <summary>
-        /// Creates a new persistent but untyped dynamic object.
-        /// </summary>
-        /// <returns>A new dynamic object</returns>
-        public dynamic CreateNewDynamicObject()
-        {
-            return _dynamicStore.MakeNewObject(UriPrefix);
         }
 
         /// <summary>
@@ -102,6 +94,18 @@ namespace BrightstarDB.DynamicSystem
         public void SaveChanges()
         {
             _dynamicStore.SaveChanges();
+        }
+
+        public IEnumerable<dynamic> GetInstancesOfType(string typeName)
+        {
+            var type = GetType(typeName);
+            if (type == null) throw new Exception("No type exists for " + typeName);
+            return FindByQuery(string.Format(GetInstancesOfTypeQuery, type.Identity));
+        }
+
+        public IEnumerable<dynamic> FindByQuery(string sparqlQuery)
+        {
+            return _dynamicStore.BindObjectsWithSparql(sparqlQuery);
         }
     }
 }

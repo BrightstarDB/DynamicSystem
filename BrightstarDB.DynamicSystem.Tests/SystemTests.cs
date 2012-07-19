@@ -51,6 +51,7 @@ namespace BrightstarDB.DynamicSystem.Tests
             Assert.AreEqual(0, typeCount);
             dos.AssertType("Person", new string[] { "age", "name", "hometown" });
             var type = dos.GetType("Person");
+            Assert.IsNotNull(type);
         }
 
         [TestMethod]
@@ -72,23 +73,66 @@ namespace BrightstarDB.DynamicSystem.Tests
         }
 
         [TestMethod]
-        public void TestCreateUntypedDynamic()
-        {
-            var storeId = Guid.NewGuid().ToString();
-            var dos = new DynamicObjectSystem(ConnectionString, storeId);
-            var dyna1 = dos.CreateNewDynamicObject();
-            dos.SaveChanges();
-            Assert.IsNotNull(dyna1.Id);
-        }
-
-        [TestMethod]
-        public void TestCreateTypedDynamic()
+        public void TestCreateTypedDynamicObject()
         {
             var storeId = Guid.NewGuid().ToString();
             var dos = new DynamicObjectSystem(ConnectionString, storeId);
             var person = dos.AssertType("Person", new string[] { "age", "name", "hometown" });
             var bob = dos.CreateNewDynamicObject("Person");
-            Assert.AreEqual(person.Id.FirstOrDefault(), bob.ds__type.FirstOrDefault().Id.FirstOrDefault());
+
+            // check that the id of the type of the instance is the same as the type we passed in.
+            Assert.AreEqual(person.Identity, bob.ds__type[0].Identity);
         }
+
+        [TestMethod]
+        public void TestGetInstancesOfType()
+        {
+            var storeId = Guid.NewGuid().ToString();
+            var dos = new DynamicObjectSystem(ConnectionString, storeId);
+            var person = dos.AssertType("Person", new string[] { "age", "name", "hometown" });
+            var bob = dos.CreateNewDynamicObject("Person");
+            dos.SaveChanges();
+
+            var instancesOfPerson = dos.GetInstancesOfType("Person");
+            Assert.AreEqual(1, instancesOfPerson.Count());
+        }
+
+        [TestMethod]
+        public void TestDeleteObject()
+        {
+            var storeId = Guid.NewGuid().ToString();
+            var dos = new DynamicObjectSystem(ConnectionString, storeId);
+            var person = dos.AssertType("Person", new string[] { "age", "name", "hometown" });
+            var bob = dos.CreateNewDynamicObject("Person");
+            dos.SaveChanges();
+
+            var instancesOfPerson = dos.GetInstancesOfType("Person");
+            Assert.AreEqual(1, instancesOfPerson.Count());
+
+            // delete object
+            dos.DeleteObject(bob.Identity);
+            dos.SaveChanges();
+
+            // check bob is gone
+            instancesOfPerson = dos.GetInstancesOfType("Person");
+            Assert.AreEqual(0, instancesOfPerson.Count());
+        }
+
+        [TestMethod]
+        public void TestFindByQuery()
+        {
+            var storeId = Guid.NewGuid().ToString();
+            var dos = new DynamicObjectSystem(ConnectionString, storeId);
+            var person = dos.AssertType("Person", new string[] { "age", "name", "hometown" });
+            var bob = dos.CreateNewDynamicObject("Person");
+            bob.ds__name = "Bob";
+            var bill = dos.CreateNewDynamicObject("Person");
+            bill.ds__name = "Bill";
+            dos.SaveChanges();
+
+            var queryResult = dos.FindByQuery("select ?id where { ?id <" + DynamicObjectSystem.UriPrefix + "name> \"Bob\"^^<http://www.w3.org/2001/XMLSchema#string> }" );
+            Assert.AreEqual(1, queryResult.Count());
+        }
+
     }
 }
